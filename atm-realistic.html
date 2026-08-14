@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATM Simulator — Realistic Kiosk</title>
+<style>
+:root{
+  --body-bg1:#1c2733; --body-bg2:#05070a;
+  --shell-1:#2b333c; --shell-2:#181e24; --shell-3:#0d1116;
+  --screen-blue:#c9dcf0; --screen-blue-dk:#a9c3de;
+  --navy:#123a63; --accent:#3aa0ff;
+  --led-g:#33ff8c; --led-r:#ff4747;
+  --n500-1:#5a8f56; --n500-2:#2e5a2b;
+  --font:'Segoe UI','Helvetica Neue',Arial,sans-serif;
+  --mono:'Consolas','Courier New',monospace;
+}
+*{box-sizing:border-box;}
+html,body{min-height:100%;}
+body{
+  margin:0;height:100vh;width:100vw;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 20%, var(--body-bg1) 0%, var(--body-bg2) 70%);
+  font-family:var(--font);
+  overflow:hidden;
+}
+.stage-wrap{
+  transform-origin:center center;
+  transition:transform 0.15s ease;
+}
+.kiosk{
+  width:400px;
+  background:linear-gradient(155deg,var(--shell-1) 0%,var(--shell-2) 55%,var(--shell-3) 100%);
+  border-radius:clamp(18px,4vw,28px) clamp(18px,4vw,28px) 10px 10px;
+  box-shadow:0 25px 45px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.1), inset 0 -14px 26px rgba(0,0,0,0.45), 0 0 0 1px #0a0d10;
+  padding:clamp(14px,3.5vw,22px) clamp(14px,3.5vw,22px) clamp(20px,4vw,30px);
+  position:relative;
+  overflow:visible;
+}
+.kiosk-texture{
+  position:absolute;inset:0;pointer-events:none;opacity:0.5;border-radius:inherit;overflow:hidden;
+  background:repeating-linear-gradient(100deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 2px, transparent 5px);
+}
+.kiosk-sheen{
+  position:absolute;top:0;left:0;right:0;height:40%;pointer-events:none;border-radius:inherit;overflow:hidden;
+  background:linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%);
+}
+.pedestal{
+  width:400px;height:80px;margin:0 auto;
+  background:linear-gradient(155deg,var(--shell-2) 0%,var(--shell-3) 100%);
+  border-radius:0 0 14px 14px;box-shadow:0 15px 25px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.05);
+  position:relative;top:-2px;
+}
+.pedestal::before{
+  content:'';position:absolute;left:50%;top:14px;transform:translateX(-50%);
+  width:60%;height:6px;border-radius:3px;background:rgba(0,0,0,0.4);box-shadow:inset 0 1px 3px rgba(0,0,0,0.6);
+}
+.brand-plate{
+  display:flex;align-items:center;gap:12px;flex-wrap:nowrap;
+  background:linear-gradient(90deg,#0a2350,#123a78 60%,#1c5db0);
+  border-radius:12px;padding:14px 16px;margin-bottom:14px;
+  box-shadow:inset 0 -4px 8px rgba(0,0,0,0.35), 0 4px 10px rgba(0,0,0,0.35), inset 0 2px 0 rgba(255,255,255,0.12);
+  position:relative;min-height:60px;
+}
+.keyhole-logo{
+  width:38px;height:38px;flex:0 0 auto;border-radius:50%;
+  background:radial-gradient(circle at 32% 28%, #fff, #e8b23a 42%, #a3781f 100%);
+  box-shadow:0 0 10px rgba(232,178,58,0.6), inset 0 -2px 4px rgba(0,0,0,0.25);
+  display:flex;align-items:center;justify-content:center;
+}
+.keyhole-logo svg{width:52%;height:52%;}
+.brand-text{min-width:0;flex:1 1 auto;overflow:visible;}
+.brand-plate .b1{color:#fff;font-size:24px;font-weight:900;letter-spacing:0.8px;line-height:1.2;white-space:nowrap;}
+.brand-plate .b2{color:#a9c6e8;font-size:10px;letter-spacing:1.6px;margin-top:3px;font-weight:700;white-space:nowrap;}
+.plate-lights{margin-left:auto;flex:0 0 auto;display:flex;gap:7px;}
+.plate-lights span{width:10px;height:10px;border-radius:50%;background:#33ff8c;box-shadow:0 0 10px #33ff8c;animation:blink 2.4s infinite;}
+.plate-lights span:nth-child(2){animation-delay:.4s;background:#ffd23f;box-shadow:0 0 10px #ffd23f;}
+.plate-lights span:nth-child(3){animation-delay:.8s;}
+.conn-banner{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#3a1010;color:#ffb3b3;
+  font-size:12px;padding:8px 16px;border-radius:8px;border:1px solid #7a2020;display:none;z-index:99;font-family:var(--mono);text-align:center;max-width:90vw;}
+
+.screen-shell{
+  background:#04070a;border-radius:14px;padding:clamp(8px,2vw,12px);
+  box-shadow:inset 0 0 0 4px #14181d, inset 0 8px 22px rgba(0,0,0,0.85), 0 3px 8px rgba(0,0,0,0.4), 0 0 0 1px #23282e;
+}
+.screen{
+  background:linear-gradient(170deg,var(--screen-blue) 0%,var(--screen-blue-dk) 100%);
+  border-radius:6px;aspect-ratio:9/11;position:relative;overflow:hidden;color:#0d2038;
+}
+.screen::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(rgba(255,255,255,0.05) 0px,rgba(255,255,255,0.05) 1px,transparent 2px,transparent 3px);mix-blend-mode:overlay;}
+.scr-inner{position:absolute;inset:0;padding:clamp(12px,3vw,18px) clamp(10px,2.5vw,14px) 10px;display:flex;flex-direction:column;animation:fadein .3s ease;}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.s-title{font-size:clamp(16px,4.2vw,20px);font-weight:800;color:#0d2038;text-align:center;letter-spacing:0.3px;margin-bottom:4px;}
+.s-sub{font-size:clamp(10.5px,2.6vw,12px);color:#2c4a68;text-align:center;line-height:1.5;margin-bottom:10px;}
+.s-hint{margin-top:auto;font-size:clamp(9.5px,2.3vw,11px);color:#3d5f80;text-align:center;}
+
+.icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:auto;margin-bottom:6px;}
+.icon-item{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:6px 2px;border-radius:8px;transition:background .15s;}
+.icon-item:active{background:rgba(13,32,56,0.08);}
+.icon-circle{width:clamp(34px,9vw,42px);height:clamp(34px,9vw,42px);border-radius:50%;background:rgba(13,32,56,0.08);
+  display:flex;align-items:center;justify-content:center;color:var(--navy);}
+.icon-circle svg{width:56%;height:56%;}
+.icon-item span{font-size:clamp(8.5px,2.1vw,10px);color:#25415e;font-weight:600;text-align:center;}
+
+.pulse-card{width:clamp(64px,17vw,80px);height:clamp(40px,10.5vw,50px);margin:10px auto 6px;border-radius:5px;
+  background:linear-gradient(135deg,#2b3f5c,#12233d);position:relative;animation:cardpulse 1.3s ease-in-out infinite;box-shadow:0 4px 10px rgba(0,0,0,0.3);}
+.pulse-card::before{content:'';position:absolute;top:7px;left:6px;width:16px;height:11px;background:#e8b23a;border-radius:2px;}
+@keyframes cardpulse{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+.pin-dots{display:flex;gap:12px;justify-content:center;margin:14px 0 6px;}
+.pin-dots i{width:14px;height:14px;border-radius:50%;border:1.5px solid #2c4a68;display:block;}
+.pin-dots i.filled{background:var(--navy);box-shadow:0 0 6px rgba(18,58,99,0.6);}
+.pin-dots.err i{border-color:var(--led-r);}
+.shake{animation:shakeit .4s;}
+@keyframes shakeit{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+
+.opt-row{display:flex;justify-content:space-between;align-items:center;font-size:clamp(10.5px,2.6vw,12px);
+  padding:8px 4px;color:#16324f;border-bottom:1px solid rgba(13,32,56,0.15);cursor:pointer;font-weight:600;}
+.opt-row .arrow{color:var(--navy);font-weight:800;}
+.opt-row:active{background:rgba(13,32,56,0.06);}
+
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:8px;}
+.amt-btn{background:var(--navy);color:#fff;border:none;font-size:clamp(11px,2.7vw,13px);font-weight:700;
+  border-radius:7px;padding:10px 4px;cursor:pointer;}
+.amt-btn:active{transform:scale(0.95);}
+
+.spinner{width:30px;height:30px;border-radius:50%;border:3px solid #b9cde3;border-top-color:var(--navy);
+  margin:18px auto;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.txn-row{display:flex;justify-content:space-between;font-size:clamp(9.5px,2.3vw,11px);padding:5px 0;
+  border-bottom:1px solid rgba(13,32,56,0.12);color:#25415e;}
+.txn-row b{color:#0d2038;}
+.txn-row.credit b{color:#1e7a3d;}
+.txn-row.debit b{color:#b3261e;}
+
+.big-balance{font-size:clamp(22px,6vw,28px);font-weight:800;color:#1e7a3d;font-family:var(--mono);text-align:center;margin-top:4px;}
+
+.controls{display:grid;grid-template-columns:1fr auto;gap:12px;margin-top:14px;}
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.nk{background:linear-gradient(180deg,#3a4552,#242b32);border:1px solid #464f5a;border-radius:8px;
+  height:clamp(34px,9vw,42px);font-size:clamp(14px,3.6vw,17px);font-weight:700;color:#e8edf2;cursor:pointer;
+  box-shadow:0 2px 0 #14181d, inset 0 1px 0 rgba(255,255,255,0.08);user-select:none;}
+.nk:active{transform:translateY(2px);box-shadow:0 0 0 #14181d;}
+.nk.fn{background:linear-gradient(180deg,var(--navy),#0a2545);color:#dff1ff;font-size:clamp(9px,2.2vw,10.5px);}
+.tap-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:clamp(58px,15vw,74px);}
+.tap-panel{width:100%;aspect-ratio:1;border-radius:10px;background:linear-gradient(160deg,#3a4552,#1a2027);
+  border:1px solid #4a5460;display:flex;align-items:center;justify-content:center;color:var(--accent);
+  box-shadow:inset 0 2px 5px rgba(0,0,0,0.5), 0 0 14px rgba(58,160,255,0.15);cursor:pointer;}
+.tap-panel svg{width:52%;height:52%;}
+.tap-label{font-size:8.5px;color:#7c8896;letter-spacing:1.5px;font-weight:700;}
+
+.slots{margin-top:16px;}
+.slot-box{background:linear-gradient(180deg,#22282f,#14181d);border-radius:9px;padding:10px 14px;
+  box-shadow:inset 0 3px 8px rgba(0,0,0,0.65), 0 1px 0 rgba(255,255,255,0.05);position:relative;margin-bottom:10px;overflow:visible;}
+.slot-tag{position:absolute;top:-9px;left:12px;background:#0d1014;color:#7c8896;font-size:8.5px;font-weight:700;
+  letter-spacing:1.5px;padding:2px 8px;border-radius:4px;border:1px solid #2a323a;}
+.slot-line{height:8px;background:#05070a;border-radius:3px;box-shadow:inset 0 1px 3px #000;position:relative;overflow:visible;}
+.atm-card{position:absolute;left:16px;top:-3px;width:clamp(52px,15vw,64px);height:clamp(32px,9vw,40px);border-radius:5px;
+  background:linear-gradient(135deg,#2b3f5c,#12233d);box-shadow:0 3px 8px rgba(0,0,0,0.5);z-index:5;
+  transition:transform 1s cubic-bezier(.6,0,.3,1);cursor:pointer;}
+.atm-card::before{content:'';position:absolute;top:7px;left:6px;width:16px;height:11px;background:#e8b23a;border-radius:2px;}
+.atm-card.inserted{transform:translateY(28px);}
+.atm-card.eject-again{transform:translateY(-54px);}
+.led-dot{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;
+  background:var(--led-g);box-shadow:0 0 6px var(--led-g);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+.cash-slot{min-height:26px;}
+.note-stack{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;flex-direction:column-reverse;align-items:center;z-index:6;}
+.note{width:clamp(120px,32vw,155px);height:clamp(52px,14vw,66px);border-radius:3px;margin-bottom:-45px;position:relative;
+  box-shadow:0 5px 10px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(0,0,0,0.15);opacity:0;animation:notepop .5s forwards;
+  overflow:hidden;font-family:var(--mono);
+  background:
+    repeating-linear-gradient(115deg, rgba(0,0,0,0.025) 0px, rgba(0,0,0,0.025) 1px, transparent 2px, transparent 4px),
+    linear-gradient(100deg,#c7c2b8 0%,#aca690 35%,#8f8a76 65%,#7a7562 100%);
+}
+.note .frame{position:absolute;inset:4px;border:1px solid rgba(60,50,30,0.45);border-radius:2px;}
+.note .frame::before{content:'';position:absolute;inset:3px;border:1px dashed rgba(60,50,30,0.25);}
+.note .band{position:absolute;left:31%;top:2px;bottom:2px;width:5px;
+  background:repeating-linear-gradient(180deg,#4a5568 0 3px,#8a94a3 3px 6px);opacity:0.75;
+  box-shadow:0 0 4px rgba(255,255,255,0.3);}
+.note .medallion{position:absolute;right:14%;top:50%;transform:translateY(-50%);width:26%;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.4), rgba(60,50,30,0.35) 70%);
+  box-shadow:inset 0 0 0 1px rgba(60,50,30,0.5), inset 0 0 6px rgba(0,0,0,0.3);}
+.note .medallion::after{content:'₹';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:60%;font-weight:800;color:rgba(60,50,30,0.55);}
+.note .val-big{position:absolute;left:10px;top:6px;font-size:clamp(13px,3.4vw,16px);font-weight:800;color:#2b2415;letter-spacing:0.5px;}
+.note .val-small{position:absolute;left:10px;bottom:6px;font-size:clamp(8px,2.1vw,9.5px);font-weight:700;color:#4a4030;letter-spacing:0.5px;}
+.note .lbl{position:absolute;right:14%;bottom:5px;transform:translateX(50%);font-size:5.5px;letter-spacing:1px;color:rgba(43,36,21,0.55);font-weight:700;}
+.note .serial{position:absolute;left:10px;top:50%;transform:translateY(-50%) rotate(-90deg);transform-origin:left center;
+  font-size:5.5px;letter-spacing:0.5px;color:rgba(43,36,21,0.4);font-weight:700;white-space:nowrap;}
+@keyframes notepop{0%{opacity:0;transform:translateY(34px) scale(.9)}60%{opacity:1;transform:translateY(-4px) scale(1.02)}100%{opacity:1;transform:translateY(0) scale(1)}}
+
+.footer-note{text-align:center;color:#4a525c;font-size:clamp(8.5px,2.1vw,9.5px);margin-top:12px;letter-spacing:0.4px;}
+.info-banner{
+  margin-top:10px;background:linear-gradient(90deg,#0a2350,#123a78);border-radius:10px;
+  padding:9px 12px;text-align:center;box-shadow:inset 0 -3px 6px rgba(0,0,0,0.3), 0 3px 8px rgba(0,0,0,0.3);
+}
+.info-banner .line1{color:#ffd23f;font-size:clamp(11px,2.8vw,13px);font-weight:800;letter-spacing:0.4px;}
+.info-banner .line2{color:#a9e8c6;font-size:clamp(9px,2.2vw,10.5px);font-weight:700;letter-spacing:0.3px;margin-top:3px;}
+</style>
+</head>
+<body>
+<div class="conn-banner" id="connBanner">⚠ Backend not reachable at :5000 — start atm_backend.py</div>
+<div class="stage-wrap" id="stageWrap">
+<div class="kiosk">
+  <div class="kiosk-texture"></div>
+  <div class="kiosk-sheen"></div>
+  <div class="brand-plate">
+    <div class="keyhole-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="5" fill="#0a2350"/><rect x="10" y="12" width="4" height="9" fill="#0a2350"/></svg></div>
+    <div class="brand-text">
+      <div class="b1">SBI ATM</div>
+      <div class="b2">STATE BANK OF INDIA</div>
+    </div>
+    <div class="plate-lights"><span></span><span></span><span></span></div>
+  </div>
+  <div class="screen-shell">
+    <div class="screen" id="screen"></div>
+  </div>
+
+  <div class="controls">
+    <div class="numpad" id="keypad"></div>
+    <div class="tap-col">
+      <div class="tap-panel" id="tapPanel" title="Tap / Insert Card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M6 8a8 8 0 0 1 0 8"/><path d="M9 5a12 12 0 0 1 0 14"/><path d="M12.5 2a16 16 0 0 1 0 20"/>
+        </svg>
+      </div>
+      <div class="tap-label">TAP</div>
+    </div>
+  </div>
+
+  <div class="slots">
+    <div class="slot-box">
+      <div class="slot-tag">CARD</div>
+      <div class="slot-line"><div class="atm-card" id="atmCard"></div><div class="led-dot"></div></div>
+    </div>
+    <div class="slot-box cash-slot">
+      <div class="slot-tag">CASH</div>
+      <div class="note-stack" id="noteStack"></div>
+      <div class="slot-line"></div>
+    </div>
+  </div>
+
+  <div class="info-banner">
+    <div class="line1">🔑 WORKING PIN: 1234</div>
+  </div>
+</div>
+<div class="pedestal"></div>
+</div>
+
+<script>
+// ⚠️ DEPLOY STEP: after backend is live on Render, replace the URL below
+// with your Render URL, e.g. "https://your-app-name.onrender.com"
+const API = "http://127.0.0.1:5000";
+const screenEl = document.getElementById('screen');
+const cardEl = document.getElementById('atmCard');
+const noteStackEl = document.getElementById('noteStack');
+const keypadEl = document.getElementById('keypad');
+const banner = document.getElementById('connBanner');
+
+let token=null, mode='idle', pin='', newPin='', customAmt='', lastAmount=0, lastBalance=0, cardPresent=false;
+
+// ---- sound engine (Web Audio API, no files needed) ----
+let actx = null;
+function ac(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); return actx; }
+function tone(freq, dur, type='sine', vol=0.18, startDelay=0){
+  const c = ac(); const t0 = c.currentTime + startDelay;
+  const osc = c.createOscillator(); const gain = c.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(vol, t0+0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+  osc.connect(gain); gain.connect(c.destination);
+  osc.start(t0); osc.stop(t0+dur+0.02);
+}
+function sndKey(){ tone(950, 0.06, 'square', 0.1); }
+function sndOk(){ tone(700,0.08,'sine',0.15); tone(1000,0.1,'sine',0.15,0.08); }
+function sndError(){ tone(220,0.18,'sawtooth',0.14); tone(160,0.22,'sawtooth',0.12,0.1); }
+function sndSuccess(){ tone(660,0.09,'sine',0.15); tone(880,0.09,'sine',0.15,0.09); tone(1100,0.14,'sine',0.16,0.18); }
+function sndWhoosh(){ const c=ac(); const t0=c.currentTime; const osc=c.createOscillator(); const gain=c.createGain();
+  osc.type='sine'; osc.frequency.setValueAtTime(180,t0); osc.frequency.exponentialRampToValueAtTime(500,t0+0.35);
+  gain.gain.setValueAtTime(0,t0); gain.gain.linearRampToValueAtTime(0.12,t0+0.05); gain.gain.exponentialRampToValueAtTime(0.001,t0+0.4);
+  osc.connect(gain); gain.connect(c.destination); osc.start(t0); osc.stop(t0+0.42); }
+function sndCashTick(){ tone(1400,0.045,'square',0.08); tone(300,0.05,'triangle',0.07,0.01); }
+function sndCollect(){ tone(500,0.1,'sine',0.13); tone(750,0.12,'sine',0.13,0.1); }
+
+// real ATM-style dispenser motor grind ("gharrr gharrr")
+let motorNodes = null;
+function motorStart(){
+  const c = ac();
+  const dur = 2;
+  const bufSize = Math.floor(c.sampleRate*dur);
+  const buf = c.createBuffer(1, bufSize, c.sampleRate);
+  const data = buf.getChannelData(0);
+  for(let i=0;i<bufSize;i++) data[i] = (Math.random()*2-1);
+  const noise = c.createBufferSource(); noise.buffer = buf; noise.loop = true;
+  const band = c.createBiquadFilter(); band.type='bandpass'; band.frequency.value=340; band.Q.value=1.1;
+  const gain = c.createGain(); gain.gain.value=0.12;
+  const lfo = c.createOscillator(); lfo.type='square'; lfo.frequency.value=13;
+  const lfoGain = c.createGain(); lfoGain.gain.value=0.09;
+  lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+  noise.connect(band); band.connect(gain); gain.connect(c.destination);
+  noise.start(); lfo.start();
+  motorNodes = {noise, lfo, gain};
+}
+function motorStop(){
+  if(!motorNodes) return;
+  const c = ac(); const t0 = c.currentTime;
+  motorNodes.gain.gain.setValueAtTime(motorNodes.gain.gain.value, t0);
+  motorNodes.gain.gain.exponentialRampToValueAtTime(0.001, t0+0.25);
+  setTimeout(()=>{ try{ motorNodes.noise.stop(); motorNodes.lfo.stop(); }catch(e){} motorNodes=null; }, 280);
+}
+
+// spoken "thank you" like real ATM voice prompt
+let cachedVoices = [];
+function loadVoices(){ cachedVoices = (window.speechSynthesis ? speechSynthesis.getVoices() : []); }
+if('speechSynthesis' in window){
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+function speakThankYou(){
+  if(!('speechSynthesis' in window)) return;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance('Thank you for banking with us. Please collect your card.');
+    u.rate = 0.95; u.pitch = 1.15; u.volume = 1;
+    const voices = cachedVoices.length ? cachedVoices : speechSynthesis.getVoices();
+    const femaleNamePattern = /female|zira|samantha|susan|victoria|karen|moira|tessa|fiona|kate|salli|joanna|ivy|amy|emma|google us english|google uk english female/i;
+    let voice = voices.find(v=>femaleNamePattern.test(v.name) && /en/i.test(v.lang));
+    if(!voice) voice = voices.find(v=>femaleNamePattern.test(v.name));
+    if(!voice) voice = voices.find(v=>/en-IN|en-GB|en-US/.test(v.lang));
+    if(voice) u.voice = voice;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+function render(html){ screenEl.innerHTML = `<div class="scr-inner">${html}</div>`; }
+function fmt(n){ return '₹'+Math.abs(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+async function api(path, opts){
+  try{
+    const res = await fetch(API+path, opts);
+    banner.style.display='none';
+    return await res.json();
+  }catch(e){ banner.style.display='block'; throw e; }
+}
+
+['1','2','3','4','5','6','7','8','9','*','0','#'].forEach(k=>{
+  const b=document.createElement('div');
+  const isFn = k==='*'||k==='#';
+  b.className='nk'+(isFn?' fn':'');
+  b.textContent = k==='*' ? 'CLR' : (k==='#' ? 'OK' : k);
+  b.onclick=()=>handleKey(k==='*'?'CLR':(k==='#'?'OK':k));
+  keypadEl.appendChild(b);
+});
+
+function handleKey(k){
+  sndKey();
+  if(mode==='pin'){
+    if(k==='CLR'){pin='';updatePinDots(false);return;}
+    if(k==='OK'){submitPin();return;}
+    if(pin.length<4 && /^[0-9]$/.test(k)){pin+=k;updatePinDots(false);if(pin.length===4)setTimeout(submitPin,180);}
+  }else if(mode==='newpin'){
+    if(k==='CLR'){newPin='';updatePinDots(false);return;}
+    if(k==='OK'){confirmNewPin();return;}
+    if(newPin.length<4 && /^[0-9]$/.test(k)){newPin+=k;updatePinDots(false);if(newPin.length===4)setTimeout(confirmNewPin,180);}
+  }else if(mode==='customamt'){
+    if(k==='CLR'){customAmt='';renderCustomAmt();return;}
+    if(k==='OK'){if(+customAmt>=100)doWithdraw(+customAmt);return;}
+    if(customAmt.length<6 && /^[0-9]$/.test(k)){customAmt+=k;renderCustomAmt();}
+  }else if(mode==='menu' && k==='CLR'){
+    ejectCard();
+  }
+}
+
+function updatePinDots(err){
+  const target = mode==='newpin'?newPin:pin;
+  const dots=document.querySelectorAll('.pin-dots i');
+  dots.forEach((d,i)=>d.classList.toggle('filled', i<target.length));
+  const wrap=document.querySelector('.pin-dots');
+  if(err && wrap){wrap.classList.add('err','shake');setTimeout(()=>wrap.classList.remove('shake'),400);}
+}
+
+function welcomeScreen(){
+  mode='idle';
+  render(`
+    <div class="s-title">WELCOME</div>
+    <div class="s-sub">Insert card or tap to begin</div>
+    <div class="icon-grid">
+      <div class="icon-item" onclick="insertCard()">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
+        <span>Card</span>
+      </div>
+      <div class="icon-item" onclick="insertCard()">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="18" x2="15" y2="18"/></svg></div>
+        <span>Contactless</span>
+      </div>
+      <div class="icon-item" onclick="insertCard()">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <span>Cash</span>
+      </div>
+      <div class="icon-item" onclick="insertCard()">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        <span>Services</span>
+      </div>
+    </div>
+  `);
+}
+
+document.getElementById('tapPanel').addEventListener('click', insertCard);
+
+async function insertCard(){
+  if(cardPresent) return;
+  cardPresent=true;
+  sndWhoosh();
+  cardEl.classList.add('inserted');
+  render(`<div class="s-title">Reading Card</div><div class="pulse-card"></div><div class="spinner"></div><div class="s-hint">Contacting bank server...</div>`);
+  try{
+    const data = await api('/api/insert-card', {method:'POST'});
+    token = data.token;
+    setTimeout(askPin, 800);
+  }catch(e){
+    render(`<div class="s-title" style="color:#b3261e">Connection Error</div><div class="s-sub">Cannot reach ATM server. Start atm_backend.py and retry.</div>`);
+    setTimeout(()=>{cardEl.classList.remove('inserted');cardPresent=false;welcomeScreen();},2400);
+  }
+}
+
+function askPin(){
+  mode='pin'; pin='';
+  render(`<div class="s-title">Enter PIN</div><div class="s-sub">Enter your 4-digit secure PIN</div>
+    <div class="pin-dots"><i></i><i></i><i></i><i></i></div>
+    <div class="s-hint">Press # (OK) to confirm • * (CLR) to clear</div>`);
+}
+
+async function submitPin(){
+  if(pin.length!==4) return;
+  const data = await api('/api/verify-pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,pin})});
+  if(data.ok){ sndSuccess(); showMenu(); return; }
+  if(data.retained){
+    sndError();
+    render(`<div class="s-title" style="color:#b3261e">Card Retained</div><div class="s-sub">Too many incorrect attempts.<br>Card retained for security.</div>`);
+    setTimeout(()=>{cardPresent=false;token=null;welcomeScreen();}, 3000);
+    return;
+  }
+  sndError();
+  updatePinDots(true);
+  setTimeout(()=>{
+    pin='';
+    render(`<div class="s-title" style="color:#b3261e">Incorrect PIN</div><div class="s-sub">${data.attempts_left} attempt${data.attempts_left>1?'s':''} remaining.</div>
+      <div class="pin-dots"><i></i><i></i><i></i><i></i></div><div class="s-hint">Try again</div>`);
+    mode='pin';
+  },500);
+}
+
+function showMenu(){
+  mode='menu';
+  render(`<div class="s-title">Main Menu</div><div class="s-sub">Choose a transaction</div>
+    <div class="opt-row" onclick="sndOk();goWithdraw()"><span>Cash Withdrawal</span><span class="arrow">›</span></div>
+    <div class="opt-row" onclick="sndOk();goBalance()"><span>Balance Enquiry</span><span class="arrow">›</span></div>
+    <div class="opt-row" onclick="sndOk();goMiniStatement()"><span>Mini Statement</span><span class="arrow">›</span></div>
+    <div class="opt-row" onclick="sndOk();goChangePin()"><span>Change PIN</span><span class="arrow">›</span></div>
+    <div class="s-hint">Press * (CLR) to cancel &amp; eject card</div>`);
+}
+
+function goWithdraw(){
+  mode='amount';
+  render(`<div class="s-title">Withdraw Amount</div><div class="s-sub">Tap an amount or key in your own</div>
+    <div class="grid3">
+      <div class="amt-btn" onclick="sndOk();doWithdraw(500)">₹500</div>
+      <div class="amt-btn" onclick="sndOk();doWithdraw(1000)">₹1,000</div>
+      <div class="amt-btn" onclick="sndOk();doWithdraw(2000)">₹2,000</div>
+      <div class="amt-btn" onclick="sndOk();doWithdraw(5000)">₹5,000</div>
+      <div class="amt-btn" onclick="sndOk();doWithdraw(10000)">₹10,000</div>
+      <div class="amt-btn" onclick="goCustomAmt()">Other</div>
+    </div>
+    <div class="s-hint" onclick="showMenu()" style="cursor:pointer">‹ Back to menu</div>`);
+}
+function goCustomAmt(){ mode='customamt'; customAmt=''; renderCustomAmt(); }
+function renderCustomAmt(){
+  render(`<div class="s-title">Enter Amount</div><div class="s-sub">Multiples of ₹100 • Min ₹100</div>
+    <div style="text-align:center;font-family:var(--mono);font-size:clamp(22px,6vw,28px);letter-spacing:2px;margin:16px 0;color:var(--navy);font-weight:800;">₹${customAmt||'0'}</div>
+    <div class="s-hint">Key in on numpad • # to confirm • * to clear</div>`);
+}
+
+async function doWithdraw(amount){
+  mode='processing';
+  render(`<div class="s-title">Processing</div><div class="spinner"></div><div class="s-hint">Requesting ${fmt(amount)} from bank server...</div>`);
+  const data = await api('/api/withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,amount})});
+  if(data.error){
+    const msg = data.error==='insufficient_funds' ? 'Insufficient balance.' :
+                data.error==='cash_tray_low' ? 'ATM cash tray low. Try smaller amount.' : 'Invalid amount.';
+    render(`<div class="s-title" style="color:#b3261e">Cannot Process</div><div class="s-sub">${msg}</div>`);
+    setTimeout(showMenu,1700);
+    return;
+  }
+  dispenseCash(amount, data.dispense, data.balance);
+}
+
+function dispenseCash(amount, notesObj, newBalance){
+  lastAmount=amount; lastBalance=newBalance;
+  noteStackEl.innerHTML='';
+  motorStart();
+  render(`<div class="s-title">Dispensing Cash</div><div class="spinner"></div><div class="s-hint">Counting &amp; dispensing ${fmt(amount)}... do not remove card</div>`);
+  setTimeout(()=>{
+    releaseNotes(amount, notesObj, newBalance);
+  }, 10000);
+}
+
+function releaseNotes(amount, notesObj, newBalance){
+  let order=[];
+  Object.keys(notesObj).sort((a,b)=>b-a).forEach(d=>{
+    for(let i=0;i<Math.min(notesObj[d],6);i++) order.push(d);
+  });
+  render(`<div class="s-title" style="color:#1e7a3d">Please Collect Cash</div><div class="s-sub">${fmt(amount)} dispensing below</div>
+    <div class="s-hint">${Object.entries(notesObj).map(([d,c])=>`₹${d} × ${c}`).join('  •  ')}</div>`);
+  order.forEach((d,i)=>{
+    setTimeout(()=>{
+      sndCashTick();
+      const n=document.createElement('div');
+      n.className='note';
+      n.innerHTML=`<div class="frame"></div><div class="band"></div><div class="medallion"></div>
+        <div class="val-big">₹${d}</div><div class="val-small">₹${d}</div><div class="lbl">INDIA</div>
+        <div class="serial">${(Math.random().toString(36).slice(2,5)+Math.floor(100000+Math.random()*900000)).toUpperCase()}</div>`;
+      noteStackEl.appendChild(n);
+    }, i*180);
+  });
+  setTimeout(()=>{
+    motorStop();
+    sndCollect();
+    render(`<div class="s-title" style="color:#1e7a3d">Cash Dispensed</div><div class="s-sub">Remove cash from slot below.</div>
+      <div class="opt-row" onclick="showReceipt(true)"><span>Yes, print receipt</span><span class="arrow">›</span></div>
+      <div class="opt-row" onclick="showReceipt(false)"><span>No, no receipt</span><span class="arrow">›</span></div>`);
+  }, order.length*180+900);
+}
+
+function showReceipt(withReceipt){
+  noteStackEl.innerHTML='';
+  render(`<div class="s-title">Transaction Complete</div>
+    ${withReceipt?`<div style="background:rgba(13,32,56,0.06);border:1px dashed #8fa8c2;border-radius:6px;padding:10px;margin-top:6px;">
+      <div class="opt-row" style="cursor:default"><span>Txn Type</span><b>Cash Withdrawal</b></div>
+      <div class="opt-row" style="cursor:default"><span>Amount</span><b>${fmt(lastAmount)}</b></div>
+      <div class="opt-row" style="cursor:default"><span>Avail. Balance</span><b>${fmt(lastBalance)}</b></div>
+      <div class="opt-row" style="cursor:default;border-bottom:none"><span>Date</span><b>${new Date().toLocaleDateString('en-IN')}</b></div>
+    </div>`:`<div class="s-sub">No receipt printed.</div>`}
+    <div class="s-hint" style="margin-top:8px">Ejecting card...</div>`);
+  setTimeout(ejectCard, 1900);
+}
+
+async function goBalance(){
+  render(`<div class="spinner"></div><div class="s-hint" style="text-align:center">Fetching balance from server...</div>`);
+  const data = await api('/api/balance?token='+token);
+  render(`<div class="s-title">Account Balance</div>
+    <div style="text-align:center;margin:8px 0;">
+      <div class="s-hint">SAVINGS A/C •• ${data.acc_last4}</div>
+      <div class="big-balance">${fmt(data.balance)}</div>
+    </div><div class="s-hint" onclick="showMenu()" style="cursor:pointer;margin-top:14px">‹ Back to menu</div>`);
+}
+
+async function goMiniStatement(){
+  render(`<div class="spinner"></div><div class="s-hint" style="text-align:center">Loading statement...</div>`);
+  const data = await api('/api/mini-statement?token='+token);
+  render(`<div class="s-title">Mini Statement</div><div>
+    ${data.txns.map(t=>`<div class="txn-row ${t.amt<0?'debit':'credit'}"><span>${t.date} — ${t.desc}</span><b>${t.amt<0?'-':'+'}${fmt(t.amt)}</b></div>`).join('')}
+    </div><div class="s-hint" onclick="showMenu()" style="cursor:pointer;margin-top:8px">‹ Back to menu</div>`);
+}
+
+function goChangePin(){
+  mode='newpin'; newPin='';
+  render(`<div class="s-title">Set New PIN</div><div class="s-sub">Enter a new 4-digit PIN</div>
+    <div class="pin-dots"><i></i><i></i><i></i><i></i></div><div class="s-hint"># to confirm</div>`);
+}
+async function confirmNewPin(){
+  if(newPin.length!==4) return;
+  const data = await api('/api/change-pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,new_pin:newPin})});
+  render(data.ok
+    ? `<div class="s-title" style="color:#1e7a3d">PIN Updated</div><div class="s-sub">Your ATM PIN has been changed on the server.</div>`
+    : `<div class="s-title" style="color:#b3261e">Failed</div><div class="s-sub">Invalid PIN format.</div>`);
+  setTimeout(showMenu, 1600);
+}
+
+async function ejectCard(){
+  sndWhoosh();
+  speakThankYou();
+  cardEl.classList.add('eject-again');
+  render(`<div class="s-title">Thank You</div><div class="s-sub">Please take your card.</div><div class="pulse-card"></div>`);
+  try{ await api('/api/eject-card',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}); }catch(e){}
+  setTimeout(()=>{
+    cardEl.classList.remove('eject-again');
+    cardPresent=false; token=null;
+    welcomeScreen();
+  }, 1400);
+}
+
+welcomeScreen();
+
+// ---- auto-fit: scale whole ATM so it always fits screen fully, no scrolling needed ----
+function fitToScreen(){
+  const wrap = document.getElementById('stageWrap');
+  wrap.style.transform = 'scale(1)';
+  const rect = wrap.getBoundingClientRect();
+  const margin = 44;
+  const availW = window.innerWidth - margin*2;
+  const availH = window.innerHeight - margin*2;
+  const scale = Math.min(1, availW/rect.width, availH/rect.height);
+  wrap.style.transform = `scale(${scale})`;
+}
+window.addEventListener('load', fitToScreen);
+window.addEventListener('resize', fitToScreen);
+window.addEventListener('orientationchange', ()=>setTimeout(fitToScreen,200));
+setTimeout(fitToScreen, 50);
+setTimeout(fitToScreen, 300);
+</script>
+</body>
+</html>
